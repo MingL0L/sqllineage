@@ -4,7 +4,7 @@ from typing import Set, Tuple, Union
 import networkx as nx
 from networkx import DiGraph
 
-from sqllineage.core.models import Column, Path, SubQuery, Table
+from sqllineage.core.models import Column, Path, SubQuery, Table, Formula
 from sqllineage.utils.constant import EdgeType, NodeTag
 
 DATASET_CLASSES = (Path, Table)
@@ -84,8 +84,14 @@ class SubQueryLineageHolder(ColumnLineageMixin):
         self._property_setter(value, NodeTag.CTE)
 
     def add_column_lineage(self, src: Column, tgt: Column) -> None:
-        self.graph.add_edge(src, tgt, type=EdgeType.LINEAGE)
-        self.graph.add_edge(tgt.parent, tgt, type=EdgeType.HAS_COLUMN)
+        self.graph.add_edge(src, tgt, type=EdgeType.LINEAGE, formula=tgt.formula)
+        self.graph.add_edge(tgt.parent, tgt, type=EdgeType.HAS_COLUMN, formula=tgt.formula)
+        if tgt.parent.where:
+            self.graph.add_edge(tgt.parent, Formula(
+                name=f'where_{tgt.parent.alias}', where=tgt.parent.where), type=EdgeType.WHERE, value=tgt.parent.where)
+        if tgt.parent.groupby:
+            self.graph.add_edge(tgt.parent, Formula(name=f'groupby_{tgt.parent.alias}', value=tgt.parent.groupby),
+                                type=EdgeType.GROUP_BY, groupby=tgt.parent.groupby)
         if src.parent is not None:
             # starting NetworkX v2.6, None is not allowed as node, see https://github.com/networkx/networkx/pull/4892
             self.graph.add_edge(src.parent, src, type=EdgeType.HAS_COLUMN)

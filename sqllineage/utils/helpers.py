@@ -12,8 +12,15 @@ def extract_sql_from_args(args: Namespace) -> str:
     sql = ""
     if getattr(args, "f", None):
         try:
+            # with open(args.f) as f:
+            #     sql = f.read()
             with open(args.f) as f:
-                sql = f.read()
+                for l in f.readlines():
+                    if l.lstrip().startswith('--'):
+                        continue
+                    else:
+                        sql += (' ' + l.strip())
+
         except IsADirectoryError:
             logger.exception("%s is a directory", args.f)
             exit(1)

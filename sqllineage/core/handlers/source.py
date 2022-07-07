@@ -111,12 +111,16 @@ class SourceHandler(NextTokenBaseHandler):
                 if len(holder.write) > 1:
                     raise SQLLineageException
                 tgt_tbl = list(holder.write)[0]
+                tgt_tbl.write = True
             if tgt_tbl:
                 for tgt_col in col_grp:
                     tgt_col.parent = tgt_tbl
-                    for src_col in tgt_col.to_source_columns(
-                        self._get_alias_mapping_from_table_group(tbl_grp, holder)
-                    ):
+                    for src_col in tgt_col.to_source_columns(self._get_alias_mapping_from_table_group(tbl_grp, holder)):
+                        for tbl in tbl_grp:
+                            if hasattr(src_col.parent, 'alias') and hasattr(tbl, 'alias') and src_col.parent.alias == tbl.alias:
+                                tgt_col.parent.where = tbl.where
+                                tgt_col.parent.groupby = tbl.groupby
+                                break
                         holder.add_column_lineage(src_col, tgt_col)
 
     @classmethod
@@ -139,10 +143,16 @@ class SourceHandler(NextTokenBaseHandler):
                 if "." not in identifier.value:
                     cte = cte_dict.get(identifier.get_real_name())
                     if cte is not None:
-                        # could reference CTE with or without alias
+                        # could reference CTE with or without
+                        kwargs = {
+                            "where": identifier.get_where(),
+                            "groupby": identifier.get_group_by()
+                        }
+
                         read = SubQuery.of(
                             cte.token,
                             identifier.get_alias() or identifier.get_real_name(),
+                            **kwargs
                         )
                 if read is None:
                     read = Table.of(identifier)

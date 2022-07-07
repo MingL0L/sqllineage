@@ -17,8 +17,12 @@ class EdgeType(Enum):
     RENAME = 2
     HAS_COLUMN = 3
     HAS_ALIAS = 4
+    FORMULA = 5
+    WHERE = 6
+    GROUP_BY = 7
 
 
 class LineageLevel:
     TABLE = "table"
     COLUMN = "column"
+    FORMULA = "formula"

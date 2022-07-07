@@ -1,5 +1,5 @@
-import React, {useEffect} from "react";
-import {useDispatch, useSelector} from "react-redux";
+import React, { useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import {
   fetchContent,
   fetchDAG,
@@ -7,25 +7,35 @@ import {
   setContentComposed,
   setDagLevel,
   setEditable,
-  setFile
+  setFile,
 } from "./editorSlice";
 import MonacoEditor from "react-monaco-editor";
-import {Loading} from "../widget/Loading";
-import {LoadError} from "../widget/LoadError";
-import {useHistory, useLocation} from "react-router-dom";
+import { Loading } from "../widget/Loading";
+import { LoadError } from "../widget/LoadError";
+import { useHistory, useLocation } from "react-router-dom";
 
 const useQueryParam = () => {
-  return new URLSearchParams(useLocation().search)
+  return new URLSearchParams(useLocation().search);
 };
 
 export function Editor(props) {
+  //////console.log('Editor');
+  //////console.log(props);
+
   const dispatch = useDispatch();
   const editorState = useSelector(selectEditor);
   const queryParam = useQueryParam();
   const history = useHistory();
 
+  //////console.log(dispatch);
+  //////console.log(editorState);
+  //////console.log(queryParam);
+  //////console.log(history);
+
   useEffect(() => {
     let query = queryParam.get("e");
+    //////console.log('queryParam get');
+    //////console.log(query);
     if (query !== null) {
       dispatch(setContentComposed(query));
       history.push("/");
@@ -36,53 +46,59 @@ export function Editor(props) {
         dispatch(setDagLevel("table"));
         if (file === null) {
           dispatch(setEditable(true));
-          dispatch(fetchDAG({"e": editorState.contentComposed}))
+          dispatch(fetchDAG({ e: editorState.contentComposed }));
         } else {
           dispatch(setEditable(false));
-          dispatch(fetchContent({"f": file}));
-          dispatch(fetchDAG({"f": file}));
+          dispatch(fetchContent({ f: file }));
+          dispatch(fetchDAG({ f: file }));
         }
       }
     }
-
-
-  })
+  });
 
   const handleEditorDidMount = (editor, monaco) => {
     const readOnly = monaco.editor.EditorOption.readOnly;
     editor.onDidBlurEditorText(() => {
       if (!editor.getOption(readOnly)) {
         dispatch(setContentComposed(editor.getValue()));
-        dispatch(fetchDAG({"e": editor.getValue()}));
+        dispatch(fetchDAG({ e: editor.getValue() }));
       }
-    })
+    });
     editor.onKeyDown(() => {
       // This is a walk-around to trigger "Cannot editor in readonly editor". Be default this tooltip is only shown
       // when user press backspace key on readonly editor, we want it with any key
       if (editor.getOption(readOnly)) {
-        editor.trigger(monaco.KeyCode.Backspace, 'deleteLeft')
+        editor.trigger(monaco.KeyCode.Backspace, "deleteLeft");
       }
-    })
-  }
+    });
+  };
 
   if (editorState.editorStatus === "loading") {
-    return <Loading minHeight={props.height}/>
+    return <Loading minHeight={props.height} />;
   } else if (editorState.editorStatus === "failed") {
-    return <LoadError minHeight={props.height} message={editorState.editorError}/>
+    return (
+      <LoadError minHeight={props.height} message={editorState.editorError} />
+    );
   } else {
     const options = {
-      minimap: {enabled: false},
+      minimap: { enabled: false },
       readOnly: !editorState.editable,
       wordWrap: "on",
-      automaticLayout: true
-    }
-    return <MonacoEditor
-      width={props.width}
-      height={props.height}
-      language="sql"
-      value={editorState.editable ? editorState.contentComposed : editorState.content}
-      options={options}
-      editorDidMount={handleEditorDidMount}
-    />
+      automaticLayout: true,
+    };
+    return (
+      <MonacoEditor
+        width={props.width}
+        height={props.height}
+        language="sql"
+        value={
+          editorState.editable
+            ? editorState.contentComposed
+            : editorState.content
+        }
+        options={options}
+        editorDidMount={handleEditorDidMount}
+      />
+    );
   }
 }

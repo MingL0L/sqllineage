@@ -1,7 +1,7 @@
 import itertools
 from typing import Iterator, List, Union
 
-from sqlparse.engine.grouping import _group, group_functions
+from sqlparse.engine.grouping import _group, group_functions, group_over, group_exp
 from sqlparse.sql import (
     Case,
     Comparison,
@@ -164,3 +164,5 @@ def group_function_with_window(tlist):
     group_functions(tlist)
     group_functions_as(tlist)
     group_window(tlist)
+    group_over(tlist)
+    group_exp(tlist)

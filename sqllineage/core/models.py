@@ -71,6 +71,10 @@ class Table:
             if schema:
                 warnings.warn("Name is in schema.table format, schema param is ignored")
         self.alias = kwargs.pop("alias", self.raw_name)
+        # add formula
+        self.where = kwargs.pop("where", '')
+        self.groupby = kwargs.pop("groupby", '')
+        self.write = kwargs.pop("write", False)
 
     def __str__(self):
         return f"{self.schema}.{self.raw_name.lower()}"
@@ -107,7 +111,10 @@ class Table:
         )
         schema = Schema(parent_name) if parent_name is not None else Schema()
         alias = identifier.get_alias()
-        kwargs = {"alias": alias} if alias else {}
+        # get where or group by condition
+        where = identifier.get_where()
+        groupby = identifier.get_group_by()
+        kwargs = {"alias": alias, "where": where, "groupby": groupby} if alias else {}
         return Table(real_name, schema, **kwargs)
 
 
@@ -133,7 +140,7 @@ class Partition:
 
 
 class SubQuery:
-    def __init__(self, token: Parenthesis, alias: Optional[str]):
+    def __init__(self, token: Parenthesis, alias: Optional[str], **kwargs):
         """
         Data Class for SubQuery
 
@@ -143,6 +150,9 @@ class SubQuery:
         self.token = token
         self._query = token.value
         self.alias = alias if alias is not None else f"subquery_{hash(self)}"
+        self.write = kwargs.pop("write", False)
+        self.where = kwargs.pop("where", '')
+        self.groupby = kwargs.pop("groupby", '')
 
     def __str__(self):
         return self.alias
@@ -157,8 +167,45 @@ class SubQuery:
         return hash(self._query)
 
     @staticmethod
-    def of(parenthesis: Parenthesis, alias: Optional[str]) -> "SubQuery":
-        return SubQuery(parenthesis, alias)
+    def of(parenthesis: Parenthesis, alias: Optional[str], **kwargs) -> "SubQuery":
+        return SubQuery(parenthesis, alias, **kwargs)
+
+
+class Formula:
+    def __init__(self, name: str, **kwargs):
+        """
+        Data Class for Formula
+        """
+        self._parent: Set[Union[Table, SubQuery]] = set()
+        self.raw_name = escape_identifier_name(name)
+
+    def __str__(self):
+        return (
+            f"{self.parent}.{self.raw_name.lower()}"
+            if self.parent is not None and not isinstance(self.parent, Path)
+            else f"{self.raw_name.lower()}"
+        )
+
+    def __repr__(self):
+        return "Formula: " + str(self)
+
+    def __eq__(self, other):
+        return type(self) is type(other) and str(self) == str(other)
+
+    def __hash__(self):
+        return hash(str(self))
+
+    @property
+    def parent(self) -> Optional[Union[Table, SubQuery]]:
+        return list(self._parent)[0] if len(self._parent) == 1 else None
+
+    @parent.setter
+    def parent(self, value: Union[Table, SubQuery]):
+        self._parent.add(value)
+
+    @property
+    def parent_candidates(self) -> List[Union[Table, SubQuery]]:
+        return sorted(self._parent, key=lambda p: str(p))
 
 
 class Column:
@@ -168,10 +215,11 @@ class Column:
 
         :param name: column name
         :param parent: :class:`Table` or :class:`SubQuery`
-        :param kwargs:
+        :param kwargs: formula: raw expression
         """
         self._parent: Set[Union[Table, SubQuery]] = set()
         self.raw_name = escape_identifier_name(name)
+        self.formula = escape_identifier_name(kwargs.pop("formula", ""))
         self.source_columns = kwargs.pop("source_columns", ((self.raw_name, None),))
 
     def __str__(self):
@@ -214,22 +262,23 @@ class Column:
                     kw_idx, _ = token.token_next_by(i=Identifier)
                 if kw_idx is None:
                     # invalid syntax: col AS, without alias
-                    return Column(alias)
+                    return Column(alias, formula=token.value)
                 else:
                     idx, _ = token.token_prev(kw_idx, skip_cm=True)
                     expr = grouping.group(TokenList(token.tokens[: idx + 1]))[0]
                     source_columns = Column._extract_source_columns(expr)
-                    return Column(alias, source_columns=source_columns)
+                    return Column(alias, formula=token.value, source_columns=source_columns)
             else:
                 # select column name directly without alias
                 return Column(
                     token.get_real_name(),
+                    formula=token.value,
                     source_columns=((token.get_real_name(), token.get_parent_name()),),
                 )
         else:
             # Wildcard, Case, Function without alias (thus not recognized as an Identifier)
             source_columns = Column._extract_source_columns(token)
-            return Column(token.value, source_columns=source_columns)
+            return Column(token.value, formula=token.value, source_columns=source_columns)
 
     @staticmethod
     def _extract_source_columns(token: Token) -> List[ColumnQualifierTuple]:

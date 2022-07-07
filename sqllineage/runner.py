@@ -179,3 +179,7 @@ Target Tables:
         self._stmt_holders = [LineageAnalyzer().analyze(stmt) for stmt in self._stmt]
         self._sql_holder = SQLLineageHolder.of(*self._stmt_holders)
         self._evaluated = True
+    
+    @lazy_method
+    def get_sql_holder(self):
+        return self._sql_holder
